@@ -25,6 +25,36 @@ var server = http.createServer(function (request, response) {
 
   if (path === '/') {
     let string = fs.readFileSync('./index.html', 'utf-8')
+
+    // console.log('cookies')
+    // console.log(request.headers.cookie)
+    let cookies = request.headers.cookie.split('; ')  // 注意是; 加一个空格
+    let hash = {}
+    for (let i = 0; i < cookies.length; i++){
+      let parts = cookies[i].split('=')
+      let key = parts[0]
+      let value = parts[1]
+      hash[key] = value
+    }
+    // console.log('hash')
+    // console.log(hash)
+    let email = hash.sign_in_email
+    let users = fs.readFileSync('./db/users', 'utf-8')   // users没后缀，但是是json文件，读出来是字符串的json
+    users = JSON.parse(users)    // [] json支持数组，字符串转为对象
+    let foundUser
+    for (let i = 0; i < users.length; i++){
+      if (users[i].email === email) {
+        foundUser = users[i]
+        break
+      }
+    }
+
+    if (foundUser) {
+      string = string.replace('__password__', foundUser.password)
+    } else {
+      string = string.replace('__password__', '不知道')
+    }
+
     response.statusCode = 200
     response.setHeader('Content-Type', 'text/html;charset=utf-8')
     response.write(string)
@@ -44,13 +74,13 @@ var server = http.createServer(function (request, response) {
         let parts = string.split('=')    // ['email', 'xxx']
         let key = parts[0]
         let value = parts[1]
-        hash[key] = value    // hash['email'] = 'xxx'
+        hash[key] = decodeURIComponent(value)    // hash['email'] = 'xxx'
       })
       // let email = hash['email']
       // let password = hash['password']
       // let password_confirmation = hash['password_confirmation']
       let { email, password, password_confirmation } = hash
-      console.log(email)
+      console.log('here1', email)
       if (email.indexOf('@') === -1) {
         response.statusCode = 400
         response.setHeader('Content-Type', 'application/json; charset=utf-8')  // 写这个有response.responseJSON
@@ -63,7 +93,30 @@ var server = http.createServer(function (request, response) {
         response.statusCode = 400
         response.write('password not match')
       } else {
-        response.statusCode = 200        
+        var users = fs.readFileSync('./db/users', 'utf-8')   // users没后缀，但是是json文件，读出来是字符串的json
+        try {
+          users = JSON.parse(users)    // [] json支持数组，字符串转为对象
+        } catch (exception) {          // 如果json不能parse（读的格式不对）
+          users = []
+        }
+        let inUse = false
+        for (let i = 0; i < users.length; i++){
+          let user = users[i]
+          if (user.email === email) {
+            inUse = true      // 邮箱被占用了
+            break; 
+          }
+        }
+        if (inUse) {
+          response.statusCode = 400
+          response.write('email in use')          
+        } else {
+          users.push({ email: email, password: password })
+          var usersString = JSON.stringify(users)   // 转换为json格式字符串
+          fs.writeFileSync('./db/users', usersString)
+          response.statusCode = 200        
+        }
+
       }
       response.end()
     })
@@ -78,6 +131,50 @@ var server = http.createServer(function (request, response) {
     //   response.end()
     // })
 
+  } else if (path === '/sign_in' && method == 'GET') {
+    let string = fs.readFileSync('./sign_in.html', 'utf-8')
+    response.statusCode = 200
+    response.setHeader('Content-Type', 'text/html;charset=utf-8')
+    response.write(string)
+    response.end()    
+  } else if (path === '/sign_in' && method == 'POST') {
+    readBody(request).then((body) => {
+      let strings = body.split('&')   // ['email=xxx', 'password=xxx', 'password_confirmation=xxx']
+      let hash = {}
+      strings.forEach((string) => {
+        // string = 'email=xxx'
+        let parts = string.split('=')    // ['email', 'xxx']
+        let key = parts[0]
+        let value = parts[1]
+        hash[key] = decodeURIComponent(value)    // hash['email'] = 'xxx'
+      })
+      // let email = hash['email']
+      // let password = hash['password']
+      // let password_confirmation = hash['password_confirmation']
+      let { email, password } = hash
+      console.log('here1', email)
+      console.log('here2', password)
+      var users = fs.readFileSync('./db/users', 'utf-8')   // users没后缀，但是是json文件，读出来是字符串的json
+      try {
+        users = JSON.parse(users)    // [] json支持数组，字符串转为对象
+      } catch (exception) {          // 如果json不能parse（读的格式不对）
+        users = []
+      }
+      let found
+      for (let i = 0; i < users.length; i++){
+        if (users[i].email === email && users[i].password === password) {
+          found = true
+        }
+      }
+      if (found) {
+        // Set-Cookie: <cookie-name>=<cookie-value>
+        response.setHeader('Set-Cookie', `sign_in_email=${email}; HttpOnly`)   // 设置cookie 只要我给你设置了cookie，以后每次请求都带上他
+        response.statusCode = 200
+      } else {
+        response.statusCode = 401
+      }
+      response.end()
+    })
   } else if (path === '/main.js') {
     let string = fs.readFileSync('./main.js', 'utf-8')
     response.statusCode = 200
