@@ -8,6 +8,10 @@ if (!port) {
   process.exit(1)
 }
 
+let sessions = {
+
+}
+
 var server = http.createServer(function (request, response) {
   var parsedUrl = url.parse(request.url, true)
   var pathWithQuery = request.url
@@ -25,10 +29,14 @@ var server = http.createServer(function (request, response) {
 
   if (path === '/') {
     let string = fs.readFileSync('./index.html', 'utf-8')
-
+    
+    let cookies = ''
     // console.log('cookies')
     // console.log(request.headers.cookie)
-    let cookies = request.headers.cookie.split('; ')  // 注意是; 加一个空格
+
+    if (request.headers.cookie) {
+      cookies = request.headers.cookie.split('; ')  // 注意是; 加一个空格
+    }
     let hash = {}
     for (let i = 0; i < cookies.length; i++){
       let parts = cookies[i].split('=')
@@ -38,7 +46,12 @@ var server = http.createServer(function (request, response) {
     }
     // console.log('hash')
     // console.log(hash)
-    let email = hash.sign_in_email
+    let mySession = sessions[hash.sessionId]
+
+    let email
+    if (mySession) {
+      email = sessions[hash.sessionId].sign_in_email
+    }
     let users = fs.readFileSync('./db/users', 'utf-8')   // users没后缀，但是是json文件，读出来是字符串的json
     users = JSON.parse(users)    // [] json支持数组，字符串转为对象
     let foundUser
@@ -59,7 +72,7 @@ var server = http.createServer(function (request, response) {
     response.setHeader('Content-Type', 'text/html;charset=utf-8')
     response.write(string)
     response.end()
-  } else if (path === '/sign_up' && method ==='GET') {   // 在路由
+  } else if (path === '/sign_up' && method ==='GET') {   // 在路由 注册
     let string = fs.readFileSync('./sign_up.html', 'utf-8')
     response.statusCode = 200
     response.setHeader('Content-Type', 'text/html;charset=utf-8')
@@ -137,7 +150,7 @@ var server = http.createServer(function (request, response) {
     response.setHeader('Content-Type', 'text/html;charset=utf-8')
     response.write(string)
     response.end()    
-  } else if (path === '/sign_in' && method == 'POST') {
+  } else if (path === '/sign_in' && method == 'POST') {   // 登录
     readBody(request).then((body) => {
       let strings = body.split('&')   // ['email=xxx', 'password=xxx', 'password_confirmation=xxx']
       let hash = {}
@@ -152,8 +165,7 @@ var server = http.createServer(function (request, response) {
       // let password = hash['password']
       // let password_confirmation = hash['password_confirmation']
       let { email, password } = hash
-      console.log('here1', email)
-      console.log('here2', password)
+
       var users = fs.readFileSync('./db/users', 'utf-8')   // users没后缀，但是是json文件，读出来是字符串的json
       try {
         users = JSON.parse(users)    // [] json支持数组，字符串转为对象
@@ -167,8 +179,11 @@ var server = http.createServer(function (request, response) {
         }
       }
       if (found) {
+        let sessionId = Math.random() * 100000
+        sessions[sessionId] = {sign_in_email: email}
         // Set-Cookie: <cookie-name>=<cookie-value>
-        response.setHeader('Set-Cookie', `sign_in_email=${email}; HttpOnly`)   // 设置cookie 只要我给你设置了cookie，以后每次请求都带上他
+        // response.setHeader('Set-Cookie', `sign_in_email=${email}; HttpOnl y`)   // 设置cookie 只要我给你设置了cookie，以后每次请求都带上他
+        response.setHeader('Set-Cookie', `sessionId=${sessionId}; HttpOnly`) 
         response.statusCode = 200
       } else {
         response.statusCode = 401
