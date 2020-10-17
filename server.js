@@ -27,7 +27,24 @@ var server = http.createServer(function (request, response) {
 
   console.log('方方说：含查询字符串的路径\n' + pathWithQuery)
 
-  if (path === '/') {
+  if (path === '/js/main.js') {
+    let string = fs.readFileSync('./js/main.js', 'utf-8')
+    response.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+    response.setHeader('Cache-Control', 'max-age=30000')  // 缓存30秒，30秒内不要再次请求
+    // response.setHeader('Expires', 'Sat, 17 Oct 2020 09:48:44 GMT')
+
+    response.write(string)
+    response.end()
+  } else if (path === '/css/default.css') {
+    let string = fs.readFileSync('./css/default.css', 'utf-8')
+    response.setHeader('Content-Type', 'text/css; charset=utf-8')
+    response.setHeader('Cache-Control', 'max-age=30000')  // 缓存30秒，30秒内不要再次请求
+    // response.setHeader('Expires', 'Sat, 17 Oct 2020 09:48:44 GMT')
+    response.write(string)
+    response.end()    
+  }
+
+  else if (path === '/') {
     let string = fs.readFileSync('./index.html', 'utf-8')
     
     let cookies = ''
@@ -181,6 +198,7 @@ var server = http.createServer(function (request, response) {
       if (found) {
         let sessionId = Math.random() * 100000
         sessions[sessionId] = {sign_in_email: email}
+        // response.write(`{"sessionId": ${sessionId}}`)    // 不用cookie 注释response.setHeader('Set-行
         // Set-Cookie: <cookie-name>=<cookie-value>
         // response.setHeader('Set-Cookie', `sign_in_email=${email}; HttpOnl y`)   // 设置cookie 只要我给你设置了cookie，以后每次请求都带上他
         response.setHeader('Set-Cookie', `sessionId=${sessionId}; HttpOnly`) 
